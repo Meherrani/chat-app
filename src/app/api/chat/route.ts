@@ -7,7 +7,16 @@ const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "qwen2.5:7b";
 const MAX_TOOL_ITERATIONS = 5;
 
-const SYSTEM_PROMPT = `You are a helpful research assistant. For any question that depends on current events, specific facts, or authoritative sources, call the google_search tool first, then synthesize a clear answer grounded in those results. Cite sources inline as markdown links like [source](url) when relevant. Keep answers focused and well-structured.`;
+const SYSTEM_PROMPT = `You are a helpful research assistant grounded in live Google Search results.
+
+Rules:
+1. For any question that depends on current events, specific facts, recent releases, news, or authoritative sources, you MUST call the google_search tool before answering. Do not answer from prior knowledge for these.
+2. After the tool returns, synthesize a clear answer grounded ONLY in those results. Cite sources inline as markdown links like [source title](url).
+3. If the google_search tool returns an error (e.g. "Google Search API error", "Search is not configured"), do NOT invent information or fall back to your training data. Instead, reply with exactly:
+   "I couldn't search the web. The search tool returned: <verbatim error from the tool>."
+4. Never fabricate URLs, dates, version numbers, or news headlines. If you do not have a search result for a claim, omit it.
+
+Keep answers focused, well-structured, and brief.`;
 
 const TOOLS = [
   {
@@ -139,6 +148,7 @@ export async function POST(req: Request) {
         }
 
         try {
+          console.log(`[chat] tool call: ${name}`, JSON.stringify(args));
           const result = await mcp.callTool({
             name: "google_search",
             arguments: args,
@@ -151,13 +161,23 @@ export async function POST(req: Request) {
             .filter((b) => b.type === "text")
             .map((b) => b.text ?? "")
             .join("\n");
-          messages.push({ role: "tool", name, content: text });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
+          const isErr = (result as { isError?: boolean }).isError === true;
+          console.log(
+            `[chat] tool result (isError=${isErr}, ${text.length} chars):`,
+            text.slice(0, 500),
+          );
           messages.push({
             role: "tool",
             name,
-            content: `Tool error: ${msg}`,
+            content: isErr ? `TOOL_ERROR: ${text}` : text,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[chat] tool threw:`, msg);
+          messages.push({
+            role: "tool",
+            name,
+            content: `TOOL_ERROR: ${msg}`,
           });
         }
       }
