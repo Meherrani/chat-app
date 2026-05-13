@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { getMcpClient } from "@/lib/mcp-client";
 
 export const runtime = "nodejs";
