@@ -18,81 +18,16 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-.prose-chat {
-  line-height: 1.65;
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.prose-chat p {
-  margin: 0 0 0.75em;
-}
-
-.prose-chat p:last-child {
-  margin-bottom: 0;
-}
-
-.prose-chat a {
-  color: #2563eb;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.prose-chat a:hover {
-  color: #1d4ed8;
-}
-
-.prose-chat ul,
-.prose-chat ol {
-  margin: 0.25em 0 0.75em;
-  padding-left: 1.5em;
-}
-
-.prose-chat li {
-  margin: 0.2em 0;
-}
-
-.prose-chat code {
-  background: rgba(15, 23, 42, 0.06);
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
-  font-size: 0.9em;
-}
-
-.prose-chat pre {
-  background: #0f172a;
-  color: #e2e8f0;
-  padding: 0.9em 1em;
-  border-radius: 8px;
-  overflow-x: auto;
-  font-size: 0.875em;
-  margin: 0.5em 0 1em;
-}
-
-.prose-chat pre code {
-  background: transparent;
-  padding: 0;
-}
-
-.prose-chat h1,
-.prose-chat h2,
-.prose-chat h3 {
-  font-weight: 600;
-  margin: 1em 0 0.4em;
-  line-height: 1.3;
-}
-
-.prose-chat h1 {
-  font-size: 1.25em;
-}
-.prose-chat h2 {
-  font-size: 1.125em;
-}
-.prose-chat h3 {
-  font-size: 1em;
-}
-
-.prose-chat blockquote {
-  border-left: 3px solid #cbd5e1;
-  padding-left: 0.85em;
-  color: #475569;
-  margin: 0.5em 0;
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

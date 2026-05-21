@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ChatInput from "./ChatInput";
-import ChatMessage, { type Message } from "./ChatMessage";
+import ChatMessage, {
+  type Message,
+  type SearchAnswer,
+  type SearchResult,
+} from "./ChatMessage";
 
-const SUGGESTED_PROMPTS = [
-  "What were the major tech news headlines this week?",
-  "Summarize the latest research on Mediterranean diet and longevity.",
-  "What's the current status of the James Webb Space Telescope?",
-  "Explain the recent changes to EU AI regulation in plain English.",
+const SUGGESTED_QUERIES = [
+  "Major tech news this week",
+  "Mediterranean diet and longevity",
+  "James Webb Space Telescope current mission",
+  "EU AI Act 2026 changes",
 ];
 
 function uid() {
@@ -18,58 +22,69 @@ function uid() {
 export default function ChatWindow() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages, isSending]);
+  }, [messages, isSearching]);
 
-  const send = useCallback(
-    async (text: string) => {
-      const userMsg: Message = { id: uid(), role: "user", content: text };
-      const next = [...messages, userMsg];
-      setMessages(next);
-      setInput("");
-      setError(null);
-      setIsSending(true);
+  const search = useCallback(async (query: string) => {
+    const queryMsg: Message = { id: uid(), kind: "query", content: query };
+    setMessages((prev) => [...prev, queryMsg]);
+    setInput("");
+    setIsSearching(true);
 
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: next.map((m) => ({ role: m.role, content: m.content })),
-          }),
-        });
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
 
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data?.error ?? `Request failed (${res.status})`);
-        }
-        const assistantMsg: Message = {
+      const data = (await res.json()) as {
+        query?: string;
+        answer?: SearchAnswer | null;
+        answerError?: string;
+        results?: SearchResult[];
+        error?: string;
+      };
+
+      const resultsMsg: Message = {
+        id: uid(),
+        kind: "results",
+        query: data.query ?? query,
+        answer: data.answer ?? null,
+        answerError: data.answerError,
+        results: data.results ?? [],
+        error: !res.ok
+          ? data.error ?? `Request failed (${res.status})`
+          : undefined,
+      };
+      setMessages((prev) => [...prev, resultsMsg]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [
+        ...prev,
+        {
           id: uid(),
-          role: "assistant",
-          content: data.text || "(no response)",
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
-      } finally {
-        setIsSending(false);
-      }
-    },
-    [messages],
-  );
+          kind: "results",
+          query,
+          results: [],
+          error: msg,
+        },
+      ]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
 
   const handleSubmit = () => {
     const text = input.trim();
-    if (!text || isSending) return;
-    void send(text);
+    if (!text || isSearching) return;
+    void search(text);
   };
 
   const hasMessages = messages.length > 0;
@@ -96,10 +111,10 @@ export default function ChatWindow() {
           </div>
           <div>
             <div className="text-sm font-semibold text-slate-900">
-              Search Chat
+              MCP Search
             </div>
             <div className="text-[11px] text-slate-500">
-              Grounded in live Google results via MCP
+              Live Google results via your local MCP server
             </div>
           </div>
         </div>
@@ -111,22 +126,22 @@ export default function ChatWindow() {
             <div className="px-4 pt-16 sm:px-6">
               <div className="text-center">
                 <h1 className="text-2xl font-semibold text-slate-900">
-                  What would you like to know?
+                  Search the web
                 </h1>
                 <p className="mt-2 text-sm text-slate-500">
-                  Ask anything — I&apos;ll search Google when current information
-                  is needed.
+                  Type a query and get the top results from Google, via a local
+                  MCP server.
                 </p>
               </div>
               <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
-                {SUGGESTED_PROMPTS.map((p) => (
+                {SUGGESTED_QUERIES.map((q) => (
                   <button
-                    key={p}
-                    onClick={() => send(p)}
-                    disabled={isSending}
+                    key={q}
+                    onClick={() => search(q)}
+                    disabled={isSearching}
                     className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
                   >
-                    {p}
+                    {q}
                   </button>
                 ))}
               </div>
@@ -136,17 +151,22 @@ export default function ChatWindow() {
               {messages.map((m) => (
                 <ChatMessage key={m.id} message={m} />
               ))}
-              {isSending && (
+              {isSearching && (
                 <div className="flex gap-3 px-4 py-5 sm:px-6">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24"
-                      fill="currentColor"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                       className="h-4 w-4"
                       aria-hidden
                     >
-                      <path d="M12 2a1 1 0 0 1 1 1v2.07a7.002 7.002 0 0 1 5.93 5.93H21a1 1 0 1 1 0 2h-2.07a7.002 7.002 0 0 1-5.93 5.93V21a1 1 0 1 1-2 0v-2.07A7.002 7.002 0 0 1 5.07 13H3a1 1 0 1 1 0-2h2.07A7.002 7.002 0 0 1 11 5.07V3a1 1 0 0 1 1-1Zm0 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z" />
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="m21 21-4.3-4.3" />
                     </svg>
                   </div>
                   <div className="flex items-center gap-1.5 pt-3">
@@ -164,13 +184,6 @@ export default function ChatWindow() {
               )}
             </div>
           )}
-
-          {error && (
-            <div className="mx-4 my-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:mx-6">
-              {error}
-            </div>
-          )}
-
           <div className="h-4" />
         </div>
       </div>
@@ -179,7 +192,7 @@ export default function ChatWindow() {
         value={input}
         onChange={setInput}
         onSubmit={handleSubmit}
-        disabled={isSending}
+        disabled={isSearching}
       />
     </div>
   );

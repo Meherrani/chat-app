@@ -12,8 +12,7 @@ export function getMcpClient(): Promise<Client> {
         args: [path.join(process.cwd(), "mcp-server", "google-search.mjs")],
         env: {
           ...process.env,
-          GOOGLE_API_KEY: process.env.GOOGLE_API_KEY ?? "",
-          GOOGLE_SEARCH_ENGINE_ID: process.env.GOOGLE_SEARCH_ENGINE_ID ?? "",
+          SERPAPI_API_KEY: process.env.SERPAPI_API_KEY ?? "",
         },
       });
       const client = new Client(

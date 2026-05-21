@@ -45,7 +45,7 @@ export default function ChatInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything — I'll search the web when needed."
+          placeholder="Search the web…"
           rows={1}
           disabled={disabled}
           className="flex-1 resize-none bg-transparent px-2 py-2 text-[15px] leading-relaxed text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:opacity-50"

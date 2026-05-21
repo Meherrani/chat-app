@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Search Chat",
-  description: "Conversational AI grounded in Google Search results via MCP.",
+  title: "MCP Search",
+  description: "Live Google Search results via a local MCP server.",
 };
 
 export default function RootLayout({

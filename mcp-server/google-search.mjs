@@ -5,8 +5,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-const API_KEY = process.env.GOOGLE_API_KEY;
-const CX = process.env.GOOGLE_SEARCH_ENGINE_ID;
+const API_KEY = process.env.SERPAPI_API_KEY;
 
 const server = new Server(
   { name: "google-search", version: "0.1.0" },
@@ -44,12 +43,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     throw new Error(`Unknown tool: ${request.params.name}`);
   }
 
-  if (!API_KEY || !CX) {
+  if (!API_KEY) {
     return {
       content: [
         {
           type: "text",
-          text: "Search is not configured. Set GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID in .env.local.",
+          text: "Search is not configured. Set SERPAPI_API_KEY in .env.local.",
         },
       ],
       isError: true,
@@ -67,9 +66,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
-  const url = new URL("https://www.googleapis.com/customsearch/v1");
-  url.searchParams.set("key", API_KEY);
-  url.searchParams.set("cx", CX);
+  const url = new URL("https://serpapi.com/search.json");
+  url.searchParams.set("api_key", API_KEY);
+  url.searchParams.set("engine", "google");
   url.searchParams.set("q", query);
   url.searchParams.set("num", String(num));
 
@@ -80,7 +79,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: "text",
-          text: `Google Search API error ${res.status}: ${body.slice(0, 500)}`,
+          text: `SerpAPI error ${res.status}: ${body.slice(0, 500)}`,
         },
       ],
       isError: true,
@@ -88,32 +87,84 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   const data = await res.json();
-  const items = Array.isArray(data.items) ? data.items : [];
+  const items = Array.isArray(data.organic_results)
+    ? data.organic_results.slice(0, num)
+    : [];
 
-  if (items.length === 0) {
-    return {
-      content: [{ type: "text", text: `No results for query: ${query}` }],
-    };
-  }
+  const results = items.map((item) => ({
+    title: item.title ?? "",
+    link: item.link ?? "",
+    displayLink: item.displayed_link ?? "",
+    snippet: (item.snippet ?? "").replace(/\s+/g, " ").trim(),
+  }));
 
-  const formatted = items
-    .map((item, i) => {
-      const title = item.title ?? "(no title)";
-      const link = item.link ?? "";
-      const snippet = (item.snippet ?? "").replace(/\s+/g, " ").trim();
-      return `${i + 1}. ${title}\n   URL: ${link}\n   ${snippet}`;
-    })
-    .join("\n\n");
+  const answer = extractAnswer(data);
 
   return {
     content: [
       {
         type: "text",
-        text: `Top ${items.length} Google results for "${query}":\n\n${formatted}`,
+        text: JSON.stringify({ query, answer, results }, null, 2),
       },
     ],
   };
 });
+
+function extractAnswer(data) {
+  const ab = data.answer_box;
+  if (ab) {
+    const text =
+      ab.answer ||
+      ab.result ||
+      ab.snippet ||
+      (Array.isArray(ab.snippet_highlighted_words)
+        ? ab.snippet_highlighted_words.join(", ")
+        : "") ||
+      ab.title ||
+      "";
+    if (text) {
+      return {
+        type: "answer_box",
+        text: String(text).trim(),
+        source: ab.link
+          ? { title: ab.title ?? ab.displayed_link ?? "", link: ab.link }
+          : undefined,
+      };
+    }
+  }
+
+  const ai = data.ai_overview;
+  if (ai && Array.isArray(ai.text_blocks) && ai.text_blocks.length) {
+    const text = ai.text_blocks
+      .map((b) => b.snippet || b.text || "")
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (text) {
+      const ref = Array.isArray(ai.references) ? ai.references[0] : null;
+      return {
+        type: "ai_overview",
+        text,
+        source: ref?.link
+          ? { title: ref.title ?? ref.source ?? "", link: ref.link }
+          : undefined,
+      };
+    }
+  }
+
+  const kg = data.knowledge_graph;
+  if (kg && kg.description) {
+    return {
+      type: "knowledge_graph",
+      text: String(kg.description).trim(),
+      source: kg.source?.link
+        ? { title: kg.source.name ?? kg.title ?? "", link: kg.source.link }
+        : undefined,
+    };
+  }
+
+  return null;
+}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
